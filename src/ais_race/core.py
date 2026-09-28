@@ -37,12 +37,14 @@ class TargetMetrics:
     cpa_nm: float
     tcpa_min: float
     history: list[tuple[float, float]]
+    gain_ready: dict[int, bool]
+    motion_history: list[tuple[float, float, float]]
 
 
 def east_north_nm(lat0: float, lon0: float, lat1: float, lon1: float) -> tuple[float, float]:
     """Local tangent-plane offset, suitable for the nearby race fleet."""
     north = radians(lat1 - lat0) * EARTH_NM
-    east = radians(lon1 - lon0) * EARTH_NM * cos(radians((lat0 + lat1) / 2))
+    east = radians((lon1 - lon0 + 180) % 360 - 180) * EARTH_NM * cos(radians((lat0 + lat1) / 2))
     return east, north
 
 
@@ -104,12 +106,14 @@ class RaceEngine:
         self.own_mmsi: int | None = None
 
     def ingest(self, own: Observation, targets: list[Observation]) -> None:
-        self.own_mmsi = own.mmsi
         current = [own, *targets]
         for boat in current:
-            samples = self.history.setdefault(boat.mmsi, deque())
+            samples = self.history.get(boat.mmsi)
             if samples and boat.timestamp <= samples[-1].timestamp:
                 raise ValueError("Observation times must increase for each boat")
+        self.own_mmsi = own.mmsi
+        for boat in current:
+            samples = self.history.setdefault(boat.mmsi, deque())
             samples.append(boat)
             while samples and boat.timestamp - samples[0].timestamp > self.retention_s:
                 samples.popleft()
@@ -136,12 +140,14 @@ class RaceEngine:
             averages_sog = {}
             averages_cog = {}
             gains = {}
+            gain_ready = {}
             gaps = self.gaps.get(mmsi, deque())
             for seconds in HORIZONS:
                 recent = [s for s in samples if s.timestamp >= current.timestamp - seconds]
                 averages_sog[seconds] = sum(s.sog for s in recent) / len(recent)
                 averages_cog[seconds] = circular_mean([s.cog for s in recent])
                 previous = _at_or_before(gaps, current.timestamp - seconds)
+                gain_ready[seconds] = previous is not None
                 gains[seconds] = (previous[1] - distance) * 1852 if previous else 0.0
             cpa, tcpa = cpa_tcpa(own, current)
             targets.append(asdict(TargetMetrics(
@@ -150,12 +156,21 @@ class RaceEngine:
                 bearing_deg=bearing, sog_avg=averages_sog, cog_avg=averages_cog,
                 gain_m=gains, cpa_nm=cpa, tcpa_min=tcpa,
                 history=list(gaps),
+                gain_ready=gain_ready,
+                motion_history=[(s.timestamp, s.sog, s.cog) for i, s in enumerate(samples)
+                                if i == 0 or int(s.timestamp // 10) != int(samples[i - 1].timestamp // 10)],
             )))
         targets.sort(key=lambda row: row["distance_nm"])
+        own_data = asdict(own)
+        own_data["sog_avg"], own_data["cog_avg"] = {}, {}
+        for seconds in HORIZONS:
+            recent = [s for s in self.history[self.own_mmsi] if s.timestamp >= own.timestamp - seconds]
+            own_data["sog_avg"][seconds] = sum(s.sog for s in recent) / len(recent)
+            own_data["cog_avg"][seconds] = circular_mean([s.cog for s in recent])
         return {
             "schema": 1,
             "timestamp": own.timestamp,
-            "own": asdict(own),
+            "own": own_data,
             "targets": targets,
             "units": {"distance": "NM", "speed": "kn", "angle": "degrees true", "gain": "m", "tcpa": "min"},
         }

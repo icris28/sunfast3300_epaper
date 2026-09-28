@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sunfast3300-epaper"
-version = "0.1.0"
-description = "AIS race display and 800x480 E1001 simulator"
+version = "0.2.0"
+description = "AIS race display and 800x480 TRMNL / E1001 e-paper simulator"
 requires-python = ">=3.10"
 
 [project.scripts]
@@ -15,4 +15,4 @@ ais-race = "ais_race.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ais_race = ["display.html"]
+ais_race = ["display.html", "static/*.html", "static/*.css", "static/*.js"]

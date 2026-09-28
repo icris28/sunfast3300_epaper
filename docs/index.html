@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Simulateur AIS Sun Fast 3300 : une flotte fictive et un afficheur e-paper 800 × 480. Démonstration autonome.">
+  <title>Sun Fast 3300 · AIS Race Lab</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./core.js"></script>
+  <script defer src="./epaper.js"></script>
+  <script defer src="./renderer.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body data-source="demo">
+<main>
+  <header class="masthead">
+    <div class="brand"><span class="sail" aria-hidden="true">◭</span><span>SUN FAST <b>3300</b><small>ONBOARD INSTRUMENTS / RACE LAB</small></span></div>
+    <span class="badge"><span class="dot"></span> DÉMONSTRATION AIS</span>
+  </header>
+  <div class="intro"><div><p class="eyebrow">01 / AFFICHEUR TACTIQUE</p><h1>La flotte, à portée de regard.</h1><p>Notre bateau, six concurrents. Un écran e-paper, au rythme de la course.</p></div>
+    <div class="clock"><span>TEMPS SIMULÉ</span><strong id="sim-time">05:00</strong><small id="source">AIS fictif · calcul 1 Hz</small></div></div>
+  <div class="workspace">
+    <section class="instrument" aria-label="Simulateur d’afficheur">
+      <div class="toolbar"><nav aria-label="Vues de l’afficheur">
+        <button data-page="0" aria-pressed="true">Carte</button><button data-page="1" aria-pressed="false">Tableau</button>
+        <button data-page="2" aria-pressed="false">Graphiques</button><button data-page="3" aria-pressed="false">Détail</button>
+      </nav><label class="range">Portée <select id="range"><option value="0.5">0,5 NM</option><option value="1">1 NM</option><option value="2" selected>2 NM</option><option value="5">5 NM</option></select></label></div>
+      <div class="device">
+        <div class="device-top"><span id="device-name">TRMNL 7.5 OG</span><span>800 × 480 · MONOCHROME</span></div>
+        <div class="display" id="display">
+          <canvas id="screen" width="800" height="480" tabindex="0" aria-label="Afficheur AIS, vue Carte. Flèches : pages ; Entrée : concurrent suivant."></canvas>
+          <canvas id="overlay" width="800" height="480" aria-hidden="true"></canvas>
+          <div id="refresh-flash" aria-hidden="true"></div>
+        </div>
+        <div class="hardware"><button id="previous" aria-label="Page précédente">◀</button><button id="next-target" aria-label="Concurrent suivant">●</button><button id="next" aria-label="Page suivante">▶</button></div>
+      </div>
+      <div class="playback"><label>Concurrent <select id="target"></select></label><div><button id="pause">Pause</button><label>Vitesse <select id="speed"><option value="1">×1</option><option value="5">×5</option><option value="20">×20</option></select></label><button id="reset" title="Repartir avec 5 minutes d’historique fictif">Rejouer</button></div></div>
+      <p id="connection" role="status">Flotte fictive active · 5 min d’historique préchargées.</p>
+      <p id="accessible-summary" class="sr-only"></p>
+      <div class="legend"><span>△ Concurrent</span><span>▲ Nous / cible</span><span>Gain + : l’écart se réduit</span><span>↑ Nord en haut</span></div>
+    </section>
+    <aside aria-label="Réglages e-paper">
+      <div class="panel-title"><span class="eyebrow">02 / E-PAPER ENGINE</span><span class="live-dot"></span></div>
+      <h2>Observer le rafraîchissement</h2>
+      <p class="help">Les calculs continuent pendant que l’écran se rafraîchit.</p>
+      <label class="wide">Profil écran <select id="profile"><option value="trmnl">TRMNL 7.5 OG</option><option value="e1001">reTerminal E1001</option></select></label>
+      <label class="wide">Rendu <select id="mode"><option value="epaper">Simulation e-paper</option><option value="instant">Instantané</option></select></label>
+      <form id="settings">
+        <div class="settings-grid">
+          <label>Partial (s)<input id="partial" name="partial" type="number" value="2" min="0.5" max="10" step="0.5" required></label>
+          <label>Graphiques (s)<input id="graph" name="graph" type="number" value="10" min="1" max="60" step="1" required></label>
+          <label>Full min. (s)<input id="fullMin" name="fullMin" type="number" value="30" min="5" max="120" step="1" required></label>
+          <label>Full max. (s)<input id="fullMax" name="fullMax" type="number" value="60" min="5" max="180" step="1" required></label>
+          <label>Seuil ghost<input id="ghostLimit" name="ghostLimit" type="number" value="30" min="1" max="200" step="1" required></label>
+          <label>Mouvement (px)<input id="movement" name="movement" type="number" value="3" min="1" max="15" step="1" required></label>
+        </div>
+        <button class="apply" type="submit">Appliquer les paramètres</button>
+        <p id="settings-message" role="status"></p>
+      </form>
+      <label class="check"><input id="diagnostic" type="checkbox"> Montrer les dirty rectangles</label>
+      <label class="check"><input id="ghosting" type="checkbox" checked> Simuler les traces de ghosting</label>
+      <button id="cleanup" class="cleanup">↻ Nettoyer l’écran (full)</button>
+      <p class="help" id="timings">Durées simulées : partial 0,34 s · full 3,5 s.</p>
+      <p class="fine">Modèle visuel expérimental. Les durées et le ghosting sont à calibrer sur la dalle réelle.</p>
+    </aside>
+  </div>
+  <section class="telemetry" aria-label="Diagnostic du rafraîchissement">
+    <div><span>ÉTAT ÉCRAN</span><strong id="refresh-state">Initialisation</strong><small id="refresh-reason">démarrage</small></div>
+    <div><span>PARTIAL / FULL</span><strong id="counts">0 / 0</strong><small id="partial-run">0 partial depuis nettoyage</small></div>
+    <div><span>GHOST SCORE</span><strong id="ghost-score">0 / 30</strong><progress id="ghost-meter" value="0" max="30" aria-label="Score de ghosting"></progress></div>
+    <div><span>DEPUIS LE FULL</span><strong id="full-age">0 s</strong><small id="area">Surface mise à jour : 0 %</small></div>
+  </section>
+  <details class="notes"><summary>Comment fonctionne cette démonstration ?</summary>
+    <p>Le navigateur simule le Sun Fast et six concurrents, avec un échantillon par seconde simulée. ×5 et ×20 accélèrent la flotte ; les délais e-paper restent en secondes réelles. Les onglets masqués suspendent la flotte. Les boutons sous l’écran reproduisent trois boutons physiques.</p>
+    <p>Seuils : mouvement 3 px, distance 0,01 NM, SOG 0,05 kn, COG 2°, gain 5 m. Les changements sont comparés au dernier affichage. Les rectangles englobent les anciennes et nouvelles positions, avec leurs labels et vecteurs. Les graphiques affichent 30 minutes, avec un point toutes les 10 secondes.</p>
+    <p>Un full est demandé à 60 s, ou dès 30 s si le score dépasse la moitié du seuil, ou immédiatement au seuil de ghosting. Changer de page, de portée, de cible ou de profil provoque aussi un full. « Instantané » enlève les délais et la rémanence.</p>
+    <p>Le gain représente la réduction de distance, pas un classement de course. Le CPA/TCPA est une projection locale à routes et vitesses constantes ; une cible qui s’éloigne a un TCPA ramené à zéro. Toutes les positions sont fictives.</p>
+  </details>
+  <footer><span>SUN FAST 3300 <b>/</b> AIS RACE LAB</span><span>Prototype 0.2 · TRMNL / E1001 · Données fictives</span></footer>
+</main>
+<noscript>Activez JavaScript pour démarrer la flotte AIS fictive.</noscript>
+</body>
+</html>

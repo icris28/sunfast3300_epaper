@@ -45,6 +45,25 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(targets), 6)
         self.assertEqual(len({b.mmsi for b in [own, *targets]}), 7)
 
+    def test_readiness_and_motion_history(self):
+        sim, engine = FleetSimulator(), RaceEngine()
+        engine.ingest(*sim.observations())
+        self.assertFalse(engine.snapshot()["targets"][0]["gain_ready"][300])
+        for _ in range(300):
+            engine.ingest(*sim.step(1))
+        target = engine.snapshot()["targets"][0]
+        self.assertTrue(target["gain_ready"][300])
+        self.assertEqual(len(target["motion_history"]), 31)
+
+    def test_invalid_batch_does_not_partially_append(self):
+        sim, engine = FleetSimulator(), RaceEngine()
+        engine.ingest(*sim.observations())
+        own, targets = sim.step()
+        targets[-1] = Observation(**{**targets[-1].__dict__, "timestamp": 0})
+        with self.assertRaises(ValueError):
+            engine.ingest(own, targets)
+        self.assertEqual(engine.snapshot()["timestamp"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
